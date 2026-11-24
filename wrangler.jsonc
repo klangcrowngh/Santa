@@ -6,7 +6,7 @@
   "workers_dev": true,
   "preview_urls": false,
   "vars": {
-    "MINI_APP_URL": "https://klangcrowngh.github.io/Santa/app/?v=20261124-2"
+    "MINI_APP_URL": "https://klangcrowngh.github.io/Santa/app/"
   },
   "durable_objects": {
     "bindings": [{ "name": "SANTA", "class_name": "Santa" }]
