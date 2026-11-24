@@ -261,7 +261,7 @@ nav, .panel {
 }
 nav {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 5px;
   margin: 12px 0;
   padding: 5px;
@@ -344,7 +344,6 @@ button { cursor: pointer; }
 button:disabled { cursor: default; opacity: 0.58; }
 :focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 .full { width: 100%; margin-top: 12px; }
-.budget-row { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 6px 12px; }
 .budget-tile {
   background: radial-gradient(ellipse at 100% 0, #ffc27819, transparent 54%), var(--glass);
 }
@@ -390,7 +389,6 @@ input[type="range"]::-moz-range-thumb {
   display: grid;
   justify-items: center;
   gap: 12px;
-  margin-top: 14px;
   padding: clamp(20px, 6vw, 32px) 16px;
   border: 1px solid #ffe7b833;
   border-radius: 18px;
@@ -408,6 +406,38 @@ input[type="range"]::-moz-range-thumb {
 }
 .result strong { font-size: clamp(1.65rem, 6vw, 2.2rem); line-height: 1.15; color: var(--accent); }
 .recipient-username { color: var(--muted); font-size: 0.85rem; }
+.wish-form textarea {
+  display: block;
+  width: 100%;
+  min-height: 104px;
+  padding: 12px 14px;
+  resize: vertical;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: #0004;
+  color: var(--ink);
+  font: inherit;
+}
+.wish-form textarea:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.wish-form .wish-status { margin: 10px 0 0; }
+.wish-form .wish-status[data-error] { color: #ffb7b7; }
+.recipient-wish {
+  width: min(100%, 420px);
+  padding-top: 14px;
+  border-top: 1px solid var(--line);
+}
+.recipient-wish h3 { margin: 0 0 8px; font-size: 0.92rem; }
+.recipient-wish p { margin: 0; white-space: pre-wrap; }
+.recipient-wish .wish-copy-status { margin-top: 8px; }
+.wish-copy-address {
+  width: 100%;
+  margin-top: 8px;
+  padding: 8px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #0004;
+  color: var(--ink);
+}
 #notice { margin: 0 0 10px; padding: 8px 11px; border-radius: 8px; background: var(--surface); font-size: 0.85rem; }
 #notice[data-error] { box-shadow: inset 3px 0 #ffffffb3; }
 dialog { width: min(420px, calc(100% - 32px)); border: 1px solid var(--line); border-radius: 20px; background: var(--card); color: var(--ink); padding: 20px; box-shadow: 0 20px 55px #000a; }

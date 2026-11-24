@@ -11,7 +11,7 @@ const screen = document.querySelector('#screen');
 const garland = document.querySelector('#holiday-garland').innerHTML;
 const notice = document.querySelector('#notice');
 const dialog = document.querySelector('dialog');
-const tabs = { people: 'Участники', draw: 'Жеребьёвка' };
+const tabs = { people: 'Участники', wish: 'Пожелания', draw: 'Жеребьёвка' };
 const escape = (value) => String(value).replace(/[&<>"']/g, (character) => ({
   '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;',
 }[character]));
@@ -27,6 +27,7 @@ let view = 'people';
 let loading = false;
 let syncing = false;
 let reveal = false;
+let wishDraft;
 let pendingConfirmation;
 
 function status(message = '', error = false) {
@@ -40,7 +41,7 @@ async function request(action, fields = {}) {
   try {
     response = await fetch(endpoint, {
       method: 'POST',
-      signal: ['event', 'avatar', 'budget'].includes(action) ? AbortSignal.timeout?.(12_000) : undefined,
+      signal: ['event', 'avatar', 'budget', 'wish'].includes(action) ? AbortSignal.timeout?.(12_000) : undefined,
       keepalive: action === 'budget',
       headers: {
         'Content-Type': 'application/json',
@@ -64,7 +65,7 @@ function hero(title, phase, summary, showStats = false) {
     <div class="hero-heading">
       ${phase ? `<p class="phase">${phase}</p>` : ''}
       <h1>${escape(title)}</h1>
-      ${showStats && event.round > 0 ? `<p class="summary">Раунд ${event.round}</p>` : summary ? `<p class="summary">${summary}</p>` : ''}
+      ${showStats && event.status === 'drawn' ? `<p class="summary">Раунд ${event.round}</p>` : summary ? `<p class="summary">${summary}</p>` : ''}
     </div>
   </header>`;
 }
@@ -131,10 +132,7 @@ function loadAvatars() {
 }
 
 function budgetPanel() {
-  if (event.status === 'drawn') return `<section class="panel budget-tile" id="budget">
-    <div class="budget-row"><h2>Бюджет</h2><strong class="budget-value">${price(event.budget)}</strong></div>
-    <p>Ваш голос зафиксирован.</p>
-  </section>`;
+  if (event.status === 'drawn') return '';
   const value = clampBudget(budgetDrafts.get(event.id)?.amount ?? event.budget ?? budget.initial);
   return `<section class="panel budget-tile" id="budget">
     <h2><label for="amount">Бюджет</label></h2>
@@ -142,6 +140,69 @@ function budgetPanel() {
     <div class="bounds"><span aria-hidden="true">${price(budget.min)}</span><output class="budget-value" for="amount" aria-live="off">${price(value)}</output><span aria-hidden="true">${price(budget.max)}</span></div>
     <p class="budget-error" role="alert" hidden></p>
   </section>`;
+}
+
+function wishPanel() {
+  return `<section class="panel">
+    <form id="gift-wish" class="wish-form">
+      <h2><label for="wish-text">Что вам подарить?</label></h2>
+      <p id="wish-hint">Опишите подарок в рамках общего бюджета и при желании добавьте ссылку на товар. Пожелание увидит участник, который дарит вам подарок.</p>
+      <textarea id="wish-text" name="wish" rows="4" maxlength="500" aria-describedby="wish-hint" placeholder="Например, настольная игра для компании">${escape(wishDraft ?? event.wish ?? '')}</textarea>
+      <div class="actions">
+        <button class="primary" type="submit">Сохранить пожелание</button>
+        <button class="secondary" type="button" data-surprise>Пусть будет сюрприз</button>
+      </div>
+      <p class="wish-mode"${event.surprise ? '' : ' hidden'}>Сейчас выбран сюрприз.</p>
+      <p class="wish-status" role="status" hidden></p>
+    </form>
+  </section>`;
+}
+
+function recipientWish({ wish, surprise }) {
+  if (surprise) return `<div class="recipient-wish"><h3>Пусть будет сюрприз</h3><p>Выберите подарок на свой вкус в рамках общего бюджета.</p></div>`;
+  if (!wish) return '';
+  const links = new Set();
+  const description = wish.replace(/https?:\/\/[^\s<>"«»]+/gi, (match) => {
+    let address = match === wish.trim() ? match : match.replace(/[.,!?;:…\]}]+$/u, '');
+    while (address.endsWith(')') && address.split(')').length > address.split('(').length) {
+      address = address.slice(0, -1);
+    }
+    try {
+      const url = new URL(address);
+      if (url.username || url.password) return match;
+      links.add(address);
+      return '';
+    } catch {
+      return match;
+    }
+  }).replace(/\(\s*\)|«\s*»/g, '').replace(/[\t ]{2,}/g, ' ').trim();
+  const buttons = Array.from(links, (link, index) => act(
+    links.size === 1 ? 'Скопировать ссылку' : `Скопировать ссылку ${index + 1}`,
+    'copy-wish-link', 'secondary', `data-link="${escape(link)}"`,
+  )).join('');
+  return `<div class="recipient-wish">
+    <h3>Пожелание к подарку</h3>
+    ${description ? `<p>${escape(description)}</p>` : ''}
+    ${buttons ? `<div class="actions">${buttons}</div><p class="wish-copy-status" role="status" hidden></p>
+      <input class="wish-copy-address" type="text" aria-label="Ссылка на товар" readonly hidden>` : ''}
+  </div>`;
+}
+
+async function copyWishLink(link) {
+  const message = screen.querySelector('.wish-copy-status');
+  const address = screen.querySelector('.wish-copy-address');
+  address.hidden = true;
+  try {
+    await navigator.clipboard.writeText(link);
+    message.textContent = 'Ссылка скопирована.';
+  } catch {
+    address.value = link;
+    address.hidden = false;
+    address.focus();
+    address.setSelectionRange(0, link.length);
+    message.textContent = 'Скопируйте выделенную ссылку.';
+  }
+  message.hidden = false;
 }
 
 function drawPanel() {
@@ -152,11 +213,12 @@ function drawPanel() {
       <span class="avatar result-avatar" data-photo-id="${recipient.id}" aria-hidden="true">${escape(initials(recipient.name))}</span>
       <strong>${escape(recipient.name)}</strong>
       ${recipient.username ? `<span class="recipient-username">@${escape(recipient.username)}</span>` : ''}
+      ${recipientWish(recipient)}
     </div>` : '';
     return `<section class="panel">
-      <h2>Результат · раунд ${event.round}</h2>
       ${match || act('Открыть мой результат', 'reveal', 'primary full')}
       ${event.organizer ? act('Переиграть жеребьёвку', 'confirm-redraw', 'secondary full') : ''}
+      ${event.organizer ? act('Отменить жеребьёвку', 'confirm-reset-draw', 'quiet full') : ''}
       ${demo && event.organizer ? act('Повторить демо', 'demo', 'quiet full') : ''}
     </section>`;
   }
@@ -187,7 +249,7 @@ function showEvent() {
 }
 
 function eventPanel() {
-  return { people: peoplePanel, draw: drawPanel }[view]();
+  return { people: peoplePanel, wish: wishPanel, draw: drawPanel }[view]();
 }
 
 async function syncEvent() {
@@ -223,7 +285,9 @@ function applyEventUpdate(next) {
     }
   }
   if ((view === 'people' && JSON.stringify(next.participants) !== JSON.stringify(previous.participants))
-    || (view === 'draw' && next.participants.length !== previous.participants.length)) renderEventPanel();
+    || (view === 'wish' && wishDraft === undefined && (next.wish !== previous.wish || next.surprise !== previous.surprise))
+    || (view === 'draw' && (next.participants.length !== previous.participants.length
+      || (reveal && JSON.stringify(next.recipient) !== JSON.stringify(previous.recipient))))) renderEventPanel();
 }
 
 function renderEventPanel() {
@@ -235,6 +299,7 @@ function selectEvent(value, next = 'people') {
   event = value;
   view = next;
   reveal = false;
+  wishDraft = undefined;
   showEvent();
 }
 
@@ -345,12 +410,22 @@ async function perform(callback) {
 
 const actions = {
   retry: () => location.reload(),
-  'confirm-draw': () => confirm('Провести жеребьёвку?', 'Состав участников и бюджет зафиксируются.',
-    'Провести', async () => {
-      const id = event.id;
+  'copy-wish-link': ({ link }) => copyWishLink(link),
+  'confirm-draw': () => {
+    const { id, round } = event;
+    confirm('Провести жеребьёвку?', 'Состав участников и бюджет зафиксируются.', 'Провести', async () => {
       if (!await flushBudget(id)) throw new Error('Бюджет не сохранён. Измените сумму и повторите попытку.');
-      selectEvent(await request('draw', { event: id }), 'draw');
-    }),
+      selectEvent(await request('draw', { event: id, round }), 'draw');
+    });
+  },
+  'confirm-reset-draw': () => {
+    const { id, round } = event;
+    confirm('Отменить жеребьёвку?', 'Текущие назначения будут сброшены. Можно будет снова менять бюджет и состав участников.',
+      'Отменить жеребьёвку', async () => {
+        applyEventUpdate(await request('reset-draw', { event: id, round }));
+        status('Жеребьёвка отменена.');
+      });
+  },
   'confirm-redraw': () => {
     const { id, round, participants } = event;
     const note = participants.length === 2
@@ -387,14 +462,60 @@ dialog.addEventListener('close', () => {
   if (dialog.returnValue === 'confirm') void perform(pendingConfirmation);
 });
 document.querySelector('main').addEventListener('click', (click) => {
+  const surprise = click.target.closest('[data-surprise]');
+  if (surprise) void saveWish(surprise.form, true);
   const button = click.target.closest('[data-action]');
   if (button) void perform(() => actions[button.dataset.action](button.dataset));
 });
 screen.addEventListener('input', ({ target }) => {
+  if (target.id === 'wish-text') {
+    wishDraft = target.value;
+    target.form.querySelector('.wish-status').hidden = true;
+  }
   if (target.id !== 'amount') return;
   slider(target);
   queueBudget(target);
 });
+screen.addEventListener('submit', (submission) => {
+  const form = submission.target;
+  if (form.id !== 'gift-wish') return;
+  submission.preventDefault();
+  void saveWish(form, false);
+});
+
+function saveWish(form, surprise) {
+  return perform(async () => {
+    const input = form.elements.wish;
+    const buttons = form.querySelectorAll('button');
+    const message = form.querySelector('.wish-status');
+    wishDraft = input.value;
+    input.readOnly = true;
+    for (const button of buttons) button.disabled = true;
+    message.hidden = true;
+    try {
+      const id = event.id;
+      await flushBudget(id);
+      const next = await request('wish', { event: id, wish: surprise ? '' : wishDraft, surprise });
+      applyEventUpdate(next);
+      wishDraft = undefined;
+      const currentInput = screen.querySelector('#wish-text');
+      if (!currentInput) return;
+      currentInput.value = next.wish;
+      currentInput.form.querySelector('.wish-mode').hidden = !next.surprise;
+      const currentMessage = currentInput.form.querySelector('.wish-status');
+      currentMessage.textContent = next.surprise ? 'Выбор сохранён.' : next.wish ? 'Пожелание сохранено.' : 'Пожелание очищено.';
+      currentMessage.removeAttribute('data-error');
+      currentMessage.hidden = false;
+    } catch (error) {
+      message.textContent = error.message;
+      message.setAttribute('data-error', '');
+      message.hidden = false;
+    } finally {
+      input.readOnly = false;
+      for (const button of buttons) button.disabled = false;
+    }
+  });
+}
 screen.addEventListener('pointerup', ({ target }) => {
   if (target.id === 'amount') queueBudget(target, true);
 });

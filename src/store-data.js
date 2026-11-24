@@ -36,6 +36,12 @@ export function createSantaStore(db, { organizerId, transaction, migrate = false
       user_id INTEGER NOT NULL,
       PRIMARY KEY (event_id, user_id)
     );
+    CREATE TABLE IF NOT EXISTS gift_wishes (
+      event_id TEXT NOT NULL,
+      user_id INTEGER NOT NULL,
+      wish TEXT NOT NULL,
+      PRIMARY KEY (event_id, user_id)
+    );
     CREATE TABLE IF NOT EXISTS pending_titles (user_id INTEGER PRIMARY KEY);
   `);
 
@@ -60,6 +66,16 @@ export function createSantaStore(db, { organizerId, transaction, migrate = false
     const current = event(id);
     if (!current) throw new SantaError('Обмен не найден. Проверьте ссылку-приглашение.');
     if (current.status !== 'open') throw new SantaError('Жеребьёвка уже прошла.');
+    return current;
+  }
+
+  function organizerRound(id, actorId, expectedRound, expectedStatus) {
+    const current = event(id);
+    if (!current) throw new SantaError('Обмен не найден.');
+    if (current.owner_id !== actorId) throw new SantaError('Жеребьёвкой управляет организатор.');
+    if (current.draw_round !== expectedRound || current.status !== expectedStatus) {
+      throw new SantaError('Жеребьёвка уже обновилась. Откройте актуальное состояние.');
+    }
     return current;
   }
 
@@ -145,6 +161,28 @@ export function createSantaStore(db, { organizerId, transaction, migrate = false
           .run(value, id, userId);
       });
     },
+    giftPreference(id, userId) {
+      const wish = db.prepare('SELECT wish FROM gift_wishes WHERE event_id = ? AND user_id = ?')
+        .get(id, userId)?.wish ?? '';
+      return { wish, surprise: wish === '' };
+    },
+    setWish(id, userId, value, surprise) {
+      if (typeof value !== 'string' || value.length > 500 || typeof surprise !== 'boolean') {
+        throw new SantaError('Пожелание должно быть не длиннее 500 символов.');
+      }
+      return transaction(() => {
+        if (!member(id, userId)) throw new SantaError('Сначала присоединитесь к обмену.');
+        const wish = surprise ? '' : value.trim();
+        if (!wish) {
+          db.prepare('DELETE FROM gift_wishes WHERE event_id = ? AND user_id = ?').run(id, userId);
+          return;
+        }
+        db.prepare(`
+          INSERT INTO gift_wishes (event_id, user_id, wish) VALUES (?, ?, ?)
+          ON CONFLICT(event_id, user_id) DO UPDATE SET wish = excluded.wish
+        `).run(id, userId, wish);
+      });
+    },
     remove(id, actorId, targetId) {
       return transaction(() => {
         const current = openEvent(id);
@@ -157,17 +195,21 @@ export function createSantaStore(db, { organizerId, transaction, migrate = false
         if (fixedExchange && member(id, targetId)) {
           db.prepare('INSERT OR IGNORE INTO removed_participants VALUES (?, ?)').run(id, targetId);
         }
+        db.prepare('DELETE FROM gift_wishes WHERE event_id = ? AND user_id = ?').run(id, targetId);
         db.prepare('DELETE FROM participants WHERE event_id = ? AND user_id = ?').run(id, targetId);
       });
     },
-    draw(id, actorId, expectedRound = 0) {
+    resetDraw(id, actorId, expectedRound) {
       return transaction(() => {
-        const current = event(id);
-        if (!current) throw new SantaError('Обмен не найден.');
-        if (current.owner_id !== actorId) throw new SantaError('Жеребьёвку запускает организатор.');
-        if (current.draw_round !== expectedRound) {
-          throw new SantaError('Жеребьёвка уже обновилась. Откройте актуальный результат.');
-        }
+        organizerRound(id, actorId, expectedRound, 'drawn');
+        db.prepare('UPDATE participants SET recipient_id = NULL WHERE event_id = ?').run(id);
+        db.prepare("UPDATE events SET status = 'open', amount = NULL WHERE id = ?").run(id);
+      });
+    },
+    draw(id, actorId, expectedRound = 0, expectedStatus = expectedRound === 0 ? 'open' : 'drawn') {
+      return transaction(() => {
+        const current = organizerRound(id, actorId, expectedRound, expectedStatus);
+        const redraw = current.status === 'drawn';
         const participants = roster(id);
         drawReady(participants);
         const givers = participants.map(({ user_id }) => user_id);
@@ -178,12 +220,12 @@ export function createSantaStore(db, { organizerId, transaction, migrate = false
             [recipients[index], recipients[other]] = [recipients[other], recipients[index]];
           }
         } while (recipients.some((recipient, index) => recipient === givers[index])
-          || (expectedRound > 0 && givers.length > 2
+          || (redraw && givers.length > 2
             && recipients.every((recipient, index) => recipient === participants[index].recipient_id)));
         const update = db.prepare(
           'UPDATE participants SET recipient_id = ? WHERE event_id = ? AND user_id = ?',
         );
-        if (expectedRound > 0) {
+        if (redraw) {
           db.prepare('UPDATE participants SET recipient_id = NULL WHERE event_id = ?').run(id);
         }
         givers.forEach((giver, index) => update.run(recipients[index], id, giver));

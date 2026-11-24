@@ -151,8 +151,8 @@ export function createBot({ api, store, username, miniAppUrl }) {
     return sendDrawResult({ store, api, id, userId });
   }
 
-  async function finishDraw(context, event, previousRound = 0) {
-    const givers = store.draw(event.id, context.user.id, previousRound);
+  async function finishDraw(context, event, previousRound) {
+    const givers = store.draw(event.id, context.user.id, previousRound, event.status);
     let failed = 0;
     for (const userId of givers) {
       try {
@@ -239,11 +239,11 @@ export function createBot({ api, store, username, miniAppUrl }) {
     }
     if (userId !== event.owner_id) throw new SantaError('Это действие доступно организатору.');
     if (action === 'i') return showInvite(context, event);
-    if (action === 'draw') return finishDraw(context, event);
+    if (action === 'draw') return finishDraw(context, event, Number(argument ?? 0));
     if (action === 'd') {
       drawReady(store.roster(id));
       return card(context, `${title(event)}\n\n🎲 <b>Провести жеребьёвку?</b>\nСостав и бюджет зафиксируются. Бот отправит каждому имя получателя в личном сообщении.`, [
-        [button('🎲 Подтвердить жеребьёвку', `draw:${id}`)],
+        [button('🎲 Подтвердить жеребьёвку', `draw:${id}:${event.draw_round}`)],
         back(id),
       ]);
     }
@@ -340,7 +340,7 @@ export function createBot({ api, store, username, miniAppUrl }) {
 export function sendDrawResult({ store, api, id, userId, round }) {
   const person = store.member(id, userId);
   const event = store.event(id);
-  if (round !== undefined && round !== event.draw_round) return;
+  if (event.status !== 'drawn' || (round !== undefined && round !== event.draw_round)) return;
   const recipient = store.member(id, person.recipient_id);
   return api('sendMessage', {
     chat_id: userId,

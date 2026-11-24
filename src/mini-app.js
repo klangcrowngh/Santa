@@ -72,6 +72,7 @@ export function createMiniApp({ store, api, token, origin, profilePhoto, demo = 
     return {
       ...info,
       budget: member.budget ?? budget.initial,
+      ...store.giftPreference(id, user.id),
       amount: event.amount ?? average(roster),
       participants: roster.map((person) => ({
         id: person.user_id,
@@ -80,11 +81,16 @@ export function createMiniApp({ store, api, token, origin, profilePhoto, demo = 
         organizer: person.user_id === event.owner_id,
         self: person.user_id === user.id,
       })),
-      recipient: recipient ? { id: recipient.user_id, name: recipient.name, username: recipient.username } : null,
+      recipient: recipient ? {
+        id: recipient.user_id,
+        name: recipient.name,
+        username: recipient.username,
+        ...store.giftPreference(id, recipient.user_id),
+      } : null,
     };
   }
 
-  async function action({ action: kind, event: requestedId, amount, title, target, round }, user) {
+  async function action({ action: kind, event: requestedId, amount, title, target, round, wish, surprise = false }, user) {
     if (kind === 'list') {
       const organizerExchange = store.ensureOrganizerExchange(user);
       if (organizerExchange) return { events: [summary(organizerExchange, user)], name: userName(user), canCreate: true };
@@ -115,11 +121,14 @@ export function createMiniApp({ store, api, token, origin, profilePhoto, demo = 
       return { photo: store.member(id, user.id) && store.member(id, target) ? photo ?? null : null };
     }
     if (kind === 'budget') store.setBudget(id, user.id, amount);
+    else if (kind === 'wish') store.setWish(id, user.id, wish, surprise);
     else if (kind === 'remove' && Number.isSafeInteger(target)) {
       store.remove(id, user.id, target);
+    } else if (kind === 'reset-draw' && Number.isSafeInteger(round) && round > 0) {
+      store.resetDraw(id, user.id, round);
     } else if (kind === 'draw' || (kind === 'redraw' && Number.isSafeInteger(round) && round > 0)) {
-      const previousRound = kind === 'draw' ? 0 : round;
-      const givers = store.draw(id, user.id, previousRound);
+      const previousRound = kind === 'draw' ? round ?? 0 : round;
+      const givers = store.draw(id, user.id, previousRound, kind === 'draw' ? 'open' : 'drawn');
       if (!demo && !store.fixedExchange) {
         for (const userId of givers) {
           try {
