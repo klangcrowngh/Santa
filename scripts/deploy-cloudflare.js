@@ -52,7 +52,7 @@ async function deploy() {
   });
   if (probe.status !== 400) throw new Error('Worker не подтвердил секрет вебхука.');
 
-  await configureTelegramMenu(api, miniAppUrl);
+  await configureTelegramMenu(api, miniAppUrl, { fixedExchange: true });
   await api('setWebhook', {
     url: webhook.href, secret_token: secret, max_connections: 1, allowed_updates: telegramUpdates,
   });

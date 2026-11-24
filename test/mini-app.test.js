@@ -51,8 +51,12 @@ test('Mini App выдаёт только свой результат и не р�
   assert.equal((await submit({ action: 'list' }, owner, 'https://example.org')).status, 403);
   assert.equal((await submit({ action: 'list' }, guest)).body.canCreate, false);
   assert.equal((await submit({ action: 'create', title: 'Новый год' }, guest)).status, 400);
-  const { body: created } = await submit({ action: 'create', title: 'Новый год' }, owner);
-  const event = created.id;
+  const { body: initial } = await submit({ action: 'list' }, owner);
+  assert.equal(initial.events.length, 1);
+  assert.equal(initial.events[0].title, 'НГ 202(sex)7');
+  const event = initial.events[0].id;
+  assert.equal((await submit({ action: 'list' }, owner)).body.events[0].id, event);
+  assert.equal((await submit({ action: 'create', title: 'Новый год' }, owner)).body.id, event);
   const invitation = (await submit({ action: 'event', event }, outsider)).body;
   assert.equal(invitation.invited, true);
   assert.equal(invitation.participants, undefined);
@@ -98,11 +102,7 @@ test('Mini App выдаёт только свой результат и не р�
   assert.equal((await submit({ action: 'redraw', event, round: 1 }, owner)).status, 400);
   assert.equal(sent.length, 4);
   assert.match(sent.at(-1).text, /раунд 2/);
-  const { body: next } = await submit({ action: 'create', title: 'Обмен по умолчанию' }, owner);
-  await submit({ action: 'open', event: next.id }, guest);
-  const defaults = (await submit({ action: 'draw', event: next.id }, owner)).body;
-  assert.equal(defaults.amount, 2500);
-  assert.equal(defaults.status, 'drawn');
+  assert.deepEqual((await submit({ action: 'list' }, owner)).body.events.map(({id}) => id), [event]);
 });
 
 test('Сервер запрашивает последнее фото профиля и кэширует миниатюру', async () => {

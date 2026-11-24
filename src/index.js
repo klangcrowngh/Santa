@@ -90,7 +90,7 @@ async function run() {
       await new Promise((resolve, reject) => server.once('error', reject).listen(port, host, resolve));
       console.log(`API: http://${host}:${port}/api/santa`);
     }
-    await configureTelegramMenu(api, miniAppUrl);
+    await configureTelegramMenu(api, miniAppUrl, { fixedExchange: store.fixedExchange });
     console.log(`Бот запущен: https://t.me/${username}`);
     while (!shutdown.signal.aborted) {
       let updates;

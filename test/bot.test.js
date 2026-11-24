@@ -97,9 +97,9 @@ test('организатор управляет составом, а случа�
   const participantIds = [organizer.id, guest.id, stranger.id, 900, 901];
   for (const userId of participantIds) {
     store.join(id, { id: userId });
-    store.setBudget(id, userId, 2500);
   }
   store.draw(id, organizer.id);
+  assert.equal(store.event(id).amount, 2500);
   const people = store.roster(id);
   assert.ok(people.every((person) => person.user_id !== person.recipient_id));
   assert.deepEqual(new Set(people.map((person) => person.recipient_id)), new Set(participantIds));

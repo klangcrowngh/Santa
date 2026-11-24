@@ -303,17 +303,6 @@ button { cursor: pointer; }
 button:disabled { cursor: default; opacity: 0.58; }
 :focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 .full { width: 100%; margin-top: 12px; }
-.title-field {
-  display: block;
-  width: 100%;
-  min-height: 44px;
-  margin-top: 5px;
-  padding: 8px;
-  border: 1px solid var(--line);
-  border-radius: 8px;
-  background: var(--paper);
-  color: var(--ink);
-}
 .budget-row { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 6px 12px; }
 .budget-tile {
   background: radial-gradient(ellipse at 100% 0, #ffc27819, transparent 54%), var(--glass);

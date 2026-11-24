@@ -86,6 +86,8 @@ export function createMiniApp({ store, api, token, origin, profilePhoto, demo = 
 
   async function action({ action: kind, event: requestedId, amount, title, target, round }, user) {
     if (kind === 'list') {
+      const organizerExchange = store.ensureOrganizerExchange(user);
+      if (organizerExchange) return { events: [summary(organizerExchange, user)], name: userName(user), canCreate: true };
       return { name: userName(user), canCreate: store.canCreate(user.id), events: store.list(user.id).map((event) => summary(event, user)) };
     }
     if (kind === 'create') return getEvent(store.create(title, user).id, user);

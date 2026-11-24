@@ -1,5 +1,6 @@
 import { randomBytes, randomInt } from 'node:crypto';
 import { budget, isBudget } from '../docs/budget/settings.js';
+import { exchangeTitle } from '../docs/app/config.js';
 
 export class SantaError extends Error {}
 
@@ -67,6 +68,28 @@ export function createSantaStore(db, { organizerId, transaction, migrate = false
   const cancelTitle = (userId) =>
     db.prepare('DELETE FROM pending_titles WHERE user_id = ?').run(userId);
   const canCreate = (userId) => organizerId === undefined || userId === organizerId;
+  const fixedExchange = organizerId !== undefined;
+
+  function createExchange(title, user) {
+    const id = randomBytes(12).toString('base64url');
+    db.prepare('INSERT INTO events (id, title, owner_id) VALUES (?, ?, ?)')
+      .run(id, title, user.id);
+    addParticipant(id, user);
+    cancelTitle(user.id);
+    return event(id);
+  }
+
+  function ensureOrganizerExchange(user) {
+    if (!fixedExchange || user.id !== organizerId) return;
+    return transaction(() => {
+      const current = db.prepare(
+        'SELECT * FROM events WHERE owner_id = ? ORDER BY status DESC, rowid DESC LIMIT 1',
+      ).get(organizerId);
+      if (!current) return createExchange(exchangeTitle, user);
+      addParticipant(current.id, user);
+      return current;
+    });
+  }
 
   return {
     event,
@@ -79,6 +102,8 @@ export function createSantaStore(db, { organizerId, transaction, migrate = false
       `).all(userId);
     },
     canCreate,
+    fixedExchange,
+    ensureOrganizerExchange,
     requestTitle: (userId) =>
       db.prepare('INSERT OR IGNORE INTO pending_titles VALUES (?)').run(userId),
     needsTitle: (userId) => Boolean(db.prepare(
@@ -87,17 +112,11 @@ export function createSantaStore(db, { organizerId, transaction, migrate = false
     cancelTitle,
     create(title, user) {
       if (!canCreate(user.id)) throw new SantaError('Создавать обмен может только организатор.');
+      if (fixedExchange) return ensureOrganizerExchange(user);
       if (typeof title !== 'string' || !title.trim() || Array.from(title.trim()).length > 48) {
         throw new SantaError('Введите название обмена длиной от 1 до 48 символов.');
       }
-      return transaction(() => {
-        const id = randomBytes(12).toString('base64url');
-        db.prepare('INSERT INTO events (id, title, owner_id) VALUES (?, ?, ?)')
-          .run(id, title.trim().replace(/\s+/g, ' '), user.id);
-        addParticipant(id, user);
-        cancelTitle(user.id);
-        return event(id);
-      });
+      return transaction(() => createExchange(title.trim().replace(/\s+/g, ' '), user));
     },
     join(id, user) {
       return transaction(() => {

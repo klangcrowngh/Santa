@@ -75,7 +75,7 @@ function budgetSummary() {
 }
 
 async function openCurrentExchange() {
-  const { events, canCreate } = await request('list');
+  const { events } = await request('list');
   const next = events.find((item) => item.status === 'open') ?? events[0];
   if (next) {
     selectEvent(await request('event', { event: next.id }));
@@ -83,23 +83,7 @@ async function openCurrentExchange() {
   }
   event = undefined;
   document.title = 'Тайный Санта';
-  if (canCreate) {
-    screen.innerHTML = `${hero('Тайный Санта', 'Обмен подарками', 'Создайте обмен или откройте приглашение от друзей.')}
-      <section class="panel">${act('Создать обмен', 'create', 'primary')}</section>`;
-  } else {
-    screen.innerHTML = hero('Тайный Санта', '', 'Откройте ссылку на обмен из беседы.');
-  }
-}
-
-function showCreate() {
-  event = undefined;
-  screen.innerHTML = `${hero('Новый обмен', 'Тайный Санта', 'Пригласите друзей после создания.')}
-    <form class="panel" data-form="create">
-      <label class="label" for="title">Название обмена</label>
-      <input class="title-field" name="title" id="title" maxlength="48" required value="${escape(exchangeTitle)}">
-      <button class="primary full">Создать обмен</button>
-    </form>`;
-  screen.querySelector('#title').select();
+  screen.innerHTML = hero('Тайный Санта', '', 'Откройте ссылку на обмен из беседы.');
 }
 
 function peoplePanel() {
@@ -360,7 +344,6 @@ async function perform(callback) {
 }
 
 const actions = {
-  create: showCreate,
   'confirm-draw': () => confirm('Провести жеребьёвку?', 'Состав участников и бюджет зафиксируются.',
     'Провести', async () => {
       const id = event.id;
@@ -418,14 +401,6 @@ screen.addEventListener('keydown', (key) => {
   const valueKeys = ['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown', 'Home', 'End', 'PageUp', 'PageDown', 'Enter', ' '];
   if (key.target.id === 'amount' && valueKeys.includes(key.key)) key.preventDefault();
 });
-screen.addEventListener('submit', (submit) => {
-  submit.preventDefault();
-  void perform(async () => {
-    const data = new FormData(submit.target);
-    selectEvent(await request('create', { title: data.get('title') }));
-  });
-});
-
 if (initData) {
   const background = document.querySelector('meta[name="theme-color"]').content;
   if (telegram.isVersionAtLeast?.('6.9')) telegram.setHeaderColor?.(background);
@@ -446,8 +421,7 @@ if (!demo && (!initData || !endpoint)) {
     if (id) {
       selectEvent(await request('open', { event: id }));
       if (query.get('view') === 'budget') screen.querySelector('#budget')?.scrollIntoView({ block: 'nearest' });
-    } else if (query.get('view') === 'create' && (await request('list')).canCreate) showCreate();
-    else if (participantPreview) selectEvent(await request('open'));
+    } else if (participantPreview) selectEvent(await request('open'));
     else await openCurrentExchange();
   });
   setInterval(syncEvent, 3000);

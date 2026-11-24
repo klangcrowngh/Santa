@@ -36,9 +36,11 @@ export function createBot({ api, store, username, miniAppUrl }) {
   }
 
   function showHome(context, requestedPage = 0) {
+    const current = store.ensureOrganizerExchange(context.user);
+    if (current) return showEvent(context, current);
     const events = store.list(context.user.id);
     const { start, navigation } = paginate(events.length, 8, requestedPage, 'home:');
-    const canCreate = store.canCreate(context.user.id);
+    const canCreate = !store.fixedExchange && store.canCreate(context.user.id);
     const rows = canCreate ? [[button('＋ Создать обмен', 'new')]] : [];
     if (miniAppUrl) rows.unshift([appButton('🎄 Открыть Тайного Санту')]);
     for (const event of events.slice(start, start + 8)) {
@@ -172,6 +174,9 @@ export function createBot({ api, store, username, miniAppUrl }) {
     if ((action === 'new' || action === 'new-chat') && !store.canCreate(userId)) {
       throw new SantaError('Создавать обмен может только организатор.');
     }
+    if ((action === 'new' || action === 'new-chat') && store.fixedExchange) {
+      return showEvent(context, store.ensureOrganizerExchange(context.user));
+    }
     if (action === 'new') {
       if (miniAppUrl) {
         return card(context, '🎄 <b>Новый обмен</b>\n\nОткройте приложение, чтобы создать обмен.', [
@@ -286,8 +291,9 @@ export function createBot({ api, store, username, miniAppUrl }) {
       return showHome(context);
     }
     if (command === '/link' && miniAppUrl) {
+      store.ensureOrganizerExchange(context.user);
       const event = store.list(userId).find((item) => item.owner_id === userId && item.status === 'open');
-      if (!event) throw new SantaError('Сначала создайте обмен командой /new.');
+      if (!event) throw new SantaError(store.fixedExchange ? 'Ссылка доступна организатору открытого обмена.' : 'Сначала создайте обмен командой /new.');
       return showInvite(context, event);
     }
     if (command === '/new') return onClick(context, 'new');

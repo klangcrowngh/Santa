@@ -32,11 +32,11 @@ export function createTelegramApi(token, { signal } = {}) {
   };
 }
 
-export async function configureTelegramMenu(api, miniAppUrl) {
+export async function configureTelegramMenu(api, miniAppUrl, { fixedExchange = false } = {}) {
   await api('setMyCommands', {
     commands: [
       { command: 'start', description: 'Открыть Тайного Санту' },
-      { command: 'new', description: 'Создать обмен' },
+      ...(fixedExchange ? [] : [{ command: 'new', description: 'Создать обмен' }]),
       ...(miniAppUrl ? [{ command: 'link', description: 'Ссылка на обмен для беседы' }] : []),
       { command: 'cancel', description: 'Вернуться в меню' },
     ],
