@@ -88,6 +88,8 @@ export function createMiniApp({ store, api, token, origin, profilePhoto, demo = 
     if (kind === 'list') {
       const organizerExchange = store.ensureOrganizerExchange(user);
       if (organizerExchange) return { events: [summary(organizerExchange, user)], name: userName(user), canCreate: true };
+      const current = store.organizerExchange();
+      if (current?.status === 'open' && !store.wasRemoved(current.id, user.id)) store.join(current.id, user);
       return { name: userName(user), canCreate: store.canCreate(user.id), events: store.list(user.id).map((event) => summary(event, user)) };
     }
     if (kind === 'create') return getEvent(store.create(title, user).id, user);
@@ -118,7 +120,7 @@ export function createMiniApp({ store, api, token, origin, profilePhoto, demo = 
     } else if (kind === 'draw' || (kind === 'redraw' && Number.isSafeInteger(round) && round > 0)) {
       const previousRound = kind === 'draw' ? 0 : round;
       const givers = store.draw(id, user.id, previousRound);
-      if (!demo) {
+      if (!demo && !store.fixedExchange) {
         for (const userId of givers) {
           try {
             await sendDrawResult({ api, store, id, userId, round: previousRound + 1 });

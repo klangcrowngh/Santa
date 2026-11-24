@@ -31,6 +31,11 @@ export function createSantaStore(db, { organizerId, transaction, migrate = false
       CHECK (recipient_id IS NULL OR recipient_id <> user_id)
     );
     CREATE INDEX IF NOT EXISTS participants_by_user ON participants(user_id);
+    CREATE TABLE IF NOT EXISTS removed_participants (
+      event_id TEXT NOT NULL REFERENCES events(id),
+      user_id INTEGER NOT NULL,
+      PRIMARY KEY (event_id, user_id)
+    );
     CREATE TABLE IF NOT EXISTS pending_titles (user_id INTEGER PRIMARY KEY);
   `);
 
@@ -69,6 +74,12 @@ export function createSantaStore(db, { organizerId, transaction, migrate = false
     db.prepare('DELETE FROM pending_titles WHERE user_id = ?').run(userId);
   const canCreate = (userId) => organizerId === undefined || userId === organizerId;
   const fixedExchange = organizerId !== undefined;
+  const organizerExchange = () => fixedExchange ? db.prepare(
+    'SELECT * FROM events WHERE owner_id = ? ORDER BY status DESC, rowid DESC LIMIT 1',
+  ).get(organizerId) : undefined;
+  const wasRemoved = (id, userId) => Boolean(db.prepare(
+    'SELECT 1 FROM removed_participants WHERE event_id = ? AND user_id = ?',
+  ).get(id, userId));
 
   function createExchange(title, user) {
     const id = randomBytes(12).toString('base64url');
@@ -82,9 +93,7 @@ export function createSantaStore(db, { organizerId, transaction, migrate = false
   function ensureOrganizerExchange(user) {
     if (!fixedExchange || user.id !== organizerId) return;
     return transaction(() => {
-      const current = db.prepare(
-        'SELECT * FROM events WHERE owner_id = ? ORDER BY status DESC, rowid DESC LIMIT 1',
-      ).get(organizerId);
+      const current = organizerExchange();
       if (!current) return createExchange(exchangeTitle, user);
       addParticipant(current.id, user);
       return current;
@@ -104,6 +113,8 @@ export function createSantaStore(db, { organizerId, transaction, migrate = false
     canCreate,
     fixedExchange,
     ensureOrganizerExchange,
+    organizerExchange,
+    wasRemoved,
     requestTitle: (userId) =>
       db.prepare('INSERT OR IGNORE INTO pending_titles VALUES (?)').run(userId),
     needsTitle: (userId) => Boolean(db.prepare(
@@ -120,6 +131,7 @@ export function createSantaStore(db, { organizerId, transaction, migrate = false
     },
     join(id, user) {
       return transaction(() => {
+        if (wasRemoved(id, user.id)) throw new SantaError('Организатор убрал вас из обмена.');
         if (!member(id, user.id)) openEvent(id);
         addParticipant(id, user);
       });
@@ -141,6 +153,9 @@ export function createSantaStore(db, { organizerId, transaction, migrate = false
         }
         if (actorId !== current.owner_id) {
           throw new SantaError('Убирать участников может только организатор.');
+        }
+        if (fixedExchange && member(id, targetId)) {
+          db.prepare('INSERT OR IGNORE INTO removed_participants VALUES (?, ?)').run(id, targetId);
         }
         db.prepare('DELETE FROM participants WHERE event_id = ? AND user_id = ?').run(id, targetId);
       });

@@ -60,7 +60,8 @@ test('Mini App выдаёт только свой результат и не р�
   const invitation = (await submit({ action: 'event', event }, outsider)).body;
   assert.equal(invitation.invited, true);
   assert.equal(invitation.participants, undefined);
-  const entered = (await submit({ action: 'open', event }, guest)).body;
+  assert.equal((await submit({ action: 'list' }, guest)).body.events[0].id, event);
+  const entered = (await submit({ action: 'event', event }, guest)).body;
   assert.equal(entered.organizer, false);
   assert.equal(entered.budget, 2500);
   assert.equal(entered.amount, 2500);
@@ -71,6 +72,10 @@ test('Mini App выдаёт только свой результат и не р�
   assert.equal((await submit({ action: 'avatar', event, target: outsider.id }, owner)).status, 400);
   assert.equal((await submit({ action: 'avatar', event, target: owner.id }, guest)).body.photo, 'data:image/jpeg;base64,SGk=');
   assert.equal((await submit({ action: 'avatar', event, target: guest.id }, owner)).body.photo, null);
+  assert.equal((await submit({ action: 'open', event }, outsider)).status, 200);
+  assert.equal((await submit({ action: 'remove', event, target: outsider.id }, owner)).status, 200);
+  assert.equal((await submit({ action: 'list' }, outsider)).body.events.length, 0);
+  assert.equal((await submit({ action: 'open', event }, outsider)).status, 400);
   assert.equal((await submit({ action: 'budget', event, amount: 900 }, owner)).status, 400);
   assert.equal((await submit({ action: 'budget', event, amount: 5100 }, owner)).status, 400);
   assert.equal((await submit({ action: 'budget', event, amount: 5000 }, owner)).body.budget, 5000);
@@ -87,8 +92,7 @@ test('Mini App выдаёт только свой результат и не р�
   assert.equal((await submit({ action: 'draw', event }, guest)).status, 400);
   const draw = (await submit({ action: 'draw', event }, owner)).body;
   assert.deepEqual(draw.recipient, { id: guest.id, name: renamed.first_name, username: renamed.username });
-  assert.equal(sent.length, 2);
-  assert.ok(sent.every((message) => message.protect_content));
+  assert.equal(sent.length, 0);
   assert.equal((await submit({ action: 'event', event }, outsider)).body.recipient, undefined);
   assert.equal((await submit({ action: 'open', event }, outsider)).body.invited, true);
   assert.equal(store.member(event, outsider.id), undefined);
@@ -100,8 +104,7 @@ test('Mini App выдаёт только свой результат и не р�
   assert.equal(redrawn.round, 2);
   assert.equal(redrawn.amount, 2250);
   assert.equal((await submit({ action: 'redraw', event, round: 1 }, owner)).status, 400);
-  assert.equal(sent.length, 4);
-  assert.match(sent.at(-1).text, /раунд 2/);
+  assert.equal(sent.length, 0);
   assert.deepEqual((await submit({ action: 'list' }, owner)).body.events.map(({id}) => id), [event]);
 });
 

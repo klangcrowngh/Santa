@@ -1,4 +1,4 @@
-import { apiUrl, exchangeTitle } from './config.js';
+import { apiUrl, exchangeTitle } from './config.js?v=20261124-2';
 import { budget, clampBudget, price } from '../budget/settings.js';
 
 const demo = location.protocol === 'http:' && location.hostname === '127.0.0.1';
@@ -83,7 +83,7 @@ async function openCurrentExchange() {
   }
   event = undefined;
   document.title = 'Тайный Санта';
-  screen.innerHTML = hero('Тайный Санта', '', 'Откройте ссылку на обмен из беседы.');
+  screen.innerHTML = hero('Тайный Санта', '', 'Сейчас запись на обмен закрыта.');
 }
 
 function peoplePanel() {
@@ -344,6 +344,7 @@ async function perform(callback) {
 }
 
 const actions = {
+  retry: () => location.reload(),
   'confirm-draw': () => confirm('Провести жеребьёвку?', 'Состав участников и бюджет зафиксируются.',
     'Провести', async () => {
       const id = event.id;
@@ -417,12 +418,18 @@ if (!demo && (!initData || !endpoint)) {
   if (initData) status('Адрес API ещё не настроен.', true);
 } else {
   await perform(async () => {
-    const id = query.get('event') || telegram?.initDataUnsafe?.start_param || query.get('tgWebAppStartParam');
-    if (id) {
-      selectEvent(await request('open', { event: id }));
-      if (query.get('view') === 'budget') screen.querySelector('#budget')?.scrollIntoView({ block: 'nearest' });
-    } else if (participantPreview) selectEvent(await request('open'));
-    else await openCurrentExchange();
+    try {
+      const id = query.get('event') || telegram?.initDataUnsafe?.start_param || query.get('tgWebAppStartParam');
+      if (id) {
+        selectEvent(await request('open', { event: id }));
+        if (query.get('view') === 'budget') screen.querySelector('#budget')?.scrollIntoView({ block: 'nearest' });
+      } else if (participantPreview) selectEvent(await request('open'));
+      else await openCurrentExchange();
+    } catch (error) {
+      screen.innerHTML = `${hero('Тайный Санта', '', '')}
+        <section class="panel">${act('Повторить', 'retry', 'primary')}</section>`;
+      throw error;
+    }
   });
   setInterval(syncEvent, 3000);
   document.addEventListener('visibilitychange', () => {

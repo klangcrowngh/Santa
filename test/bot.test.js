@@ -7,9 +7,9 @@ const organizer = { id: 123, first_name: 'Аня' };
 const guest = { id: 456, first_name: 'Илья', username: 'ilya' };
 const stranger = { id: 789, first_name: 'Маша' };
 
-function setup(context) {
+function setup(context, organizerId) {
   const calls = [];
-  const store = createStore(':memory:');
+  const store = createStore(':memory:', { organizerId });
   context.after(() => store.close());
   const handle = createBot({
     store,
@@ -28,6 +28,20 @@ function setup(context) {
     }),
   };
 }
+
+test('чат для одного обмена приветствует без встроенных кнопок', async (context) => {
+  const { calls, store, text, click } = setup(context, organizer.id);
+  await text(guest, '/start');
+  assert.equal(calls.at(-1).method, 'sendMessage');
+  assert.match(calls.at(-1).text, /Нажми «Тайный Санта» внизу чата/);
+  assert.equal(calls.at(-1).reply_markup, undefined);
+  assert.equal(store.list(guest.id).length, 0);
+  await click(guest, 'new');
+  assert.deepEqual(calls.at(-1).reply_markup.inline_keyboard, []);
+  await text(organizer, '/link');
+  assert.match(calls.at(-1).text, /Нажми «Тайный Санта» внизу чата/);
+  assert.equal(calls.at(-1).reply_markup, undefined);
+});
 
 test('приглашение, оба способа голосования и приватная жеребьёвка', async (context) => {
   const { calls, store, text, click, vote } = setup(context);

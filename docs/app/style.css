@@ -122,6 +122,47 @@ main {
   padding: max(16px, var(--safe-top)) max(16px, var(--safe-right)) max(24px, var(--safe-bottom)) max(16px, var(--safe-left));
 }
 
+.splash {
+  display: grid;
+  place-content: center;
+  justify-items: center;
+  gap: 22px;
+  min-height: min(73svh, 540px);
+  text-align: center;
+}
+.splash-mark {
+  position: relative;
+  display: grid;
+  place-items: center;
+  width: 90px;
+  height: 90px;
+  border: 1px solid #ffffff15;
+  border-radius: 50%;
+  color: #ffe6bc;
+  background: radial-gradient(circle, #fac37722, #16161670 68%);
+  box-shadow: 0 0 42px #ffc07824, inset 0 1px #ffffff0d;
+  font-size: 2.5rem;
+  text-shadow: 0 0 18px #ffb45495;
+}
+.splash-mark::before {
+  position: absolute;
+  inset: -1px;
+  border: 1px solid transparent;
+  border-top-color: var(--amber);
+  border-right-color: #ffd28a65;
+  border-radius: 50%;
+  animation: splash-orbit 1.6s linear infinite;
+  content: "";
+}
+.splash-title { margin: 0; font-size: 1.65rem; font-weight: 760; letter-spacing: -0.04em; }
+.splash-label { margin: 5px 0 0; color: var(--muted); font-size: 0.88rem; }
+@keyframes splash-orbit {
+  to { transform: rotate(360deg); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .splash-mark::before { animation: none; }
+}
+
 .hero {
   position: relative;
   isolation: isolate;

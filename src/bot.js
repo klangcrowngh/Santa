@@ -1,5 +1,6 @@
 import { budget, clampBudget, isBudget, price } from '../docs/budget/settings.js';
 import { average, drawReady, SantaError } from './store-data.js';
+import { exchangeTitle } from '../docs/app/config.js';
 
 const button = (text, callback_data) => ({ text, callback_data });
 const back = (id) => [button('‹ К обмену', `e:${id}`)];
@@ -11,6 +12,8 @@ const title = (event) => `🎄 <b>${escape(event.title)}</b>`;
 const name = (person) => escape(person.name + (person.username ? ` (@${person.username})` : ''));
 
 export function createBot({ api, store, username, miniAppUrl }) {
+  const simpleChat = store.fixedExchange && miniAppUrl;
+  const welcome = `Привет! 🎁 Приглашаю тебя в Тайного Санту «${exchangeTitle}».\n\nНажми «Тайный Санта» внизу чата, чтобы участвовать.`;
   function appButton(text, eventId, view) {
     const url = new URL(miniAppUrl);
     if (eventId) url.searchParams.set('event', eventId);
@@ -318,6 +321,12 @@ export function createBot({ api, store, username, miniAppUrl }) {
       await api('answerCallbackQuery', { callback_query_id: query.id }).catch(() => {});
     }
     try {
+      if (simpleChat) {
+        if (query) return card({ user, messageId: message.message_id }, escape(welcome), []);
+        const command = message.text?.trim().split(/\s+/, 1)[0];
+        if (['/start', '/new', '/link', '/menu', '/help'].includes(command)) return send(user.id, welcome);
+        return;
+      }
       return await (query
         ? onClick({ user, messageId: message.message_id }, query.data ?? '')
         : onMessage(message));
