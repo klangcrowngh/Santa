@@ -3,6 +3,7 @@ import { spawnSync } from 'node:child_process';
 import { mkdtemp, readFile, rmdir, unlink, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { setTimeout as delay } from 'node:timers/promises';
 import { fileURLToPath } from 'node:url';
 import { configureTelegramMenu, createTelegramApi, telegramUpdates } from '../src/telegram.js';
 
@@ -31,10 +32,10 @@ async function deploy() {
     TELEGRAM_WEBHOOK_SECRET: secret,
   };
   const worker = await publish(config.name, secrets);
+  console.log(`Адрес Worker: ${worker.origin}`);
   const webhook = new URL('/telegram/webhook', worker);
   const endpoint = new URL('/api/santa', worker);
-  const health = await fetch(new URL('/health', worker), { signal: AbortSignal.timeout(10_000) });
-  if (!health.ok || !(await health.json()).ok) throw new Error('Cloudflare Worker не прошёл проверку /health.');
+  await waitForHealth(worker);
   const options = await fetch(endpoint, {
     method: 'OPTIONS',
     headers: { Origin: miniAppUrl.origin, 'Access-Control-Request-Method': 'POST' },
@@ -64,6 +65,21 @@ async function deploy() {
   await writeFile(configPath, frontend.replace(apiLine, `export const apiUrl = ${JSON.stringify(endpoint.href)};`));
   console.log(`Cloudflare API: ${endpoint.href}`);
   console.log('Вебхук Telegram подключён. Закоммитьте docs/app/config.js и отправьте его в main для GitHub Pages.');
+}
+
+async function waitForHealth(worker) {
+  let diagnostic = 'нет ответа';
+  for (let attempt = 0; attempt < 8; attempt++) {
+    try {
+      const health = await fetch(new URL('/health', worker), { signal: AbortSignal.timeout(5000) });
+      if (health.ok && (await health.json()).ok) return;
+      diagnostic = `HTTP ${health.status}`;
+    } catch {
+      diagnostic = 'ответ не получен или не распознан';
+    }
+    if (attempt < 7) await delay(3000);
+  }
+  throw new Error(`Cloudflare Worker не прошёл проверку /health (${diagnostic}).`);
 }
 
 async function publish(name, secrets) {
