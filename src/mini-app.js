@@ -1,6 +1,6 @@
 import { createHmac, timingSafeEqual } from 'node:crypto';
 import { sendDrawResult } from './bot.js';
-import { average, SantaError, userName } from './store.js';
+import { average, SantaError, userName } from './store-data.js';
 import { exchangeTitle } from '../docs/app/config.js';
 import { budget } from '../docs/budget/settings.js';
 
@@ -129,32 +129,27 @@ export function createMiniApp({ store, api, token, origin, profilePhoto, demo = 
     return getEvent(id, user);
   }
 
-  return async (request, response) => {
-    const json = (status, value) => response.writeHead(status, {
-      'Content-Type': 'application/json; charset=utf-8',
-      'Cache-Control': 'no-store',
-    }).end(JSON.stringify(value));
-
-    if (!demo && request.headers.origin !== origin) return json(403, { error: 'Откройте Тайного Санту в Telegram.' });
-    if (!demo) {
-      response.setHeader('Access-Control-Allow-Origin', origin);
-      response.setHeader('Vary', 'Origin');
-    }
+  return async (request) => {
+    const headers = { 'Cache-Control': 'no-store' };
+    const json = (status, value) => Response.json(value, { status, headers });
+    if (!demo && request.headers.get('Origin') !== origin) return json(403, { error: 'Откройте Тайного Санту в Telegram.' });
+    if (!demo) Object.assign(headers, { 'Access-Control-Allow-Origin': origin, Vary: 'Origin' });
     if (request.method === 'OPTIONS') {
-      return response.writeHead(204, {
+      return new Response(null, { status: 204, headers: {
+        ...headers,
         'Access-Control-Allow-Methods': 'POST, OPTIONS',
         'Access-Control-Allow-Headers': 'Authorization, Content-Type',
-      }).end();
+      } });
     }
     if (request.method !== 'POST') return json(405, { error: 'Откройте приложение.' });
 
-    const authorization = request.headers.authorization;
+    const authorization = request.headers.get('Authorization');
     const user = demo ? demoUser
       : authorization?.startsWith('tma ') ? telegramUser(authorization.slice(4), token) : null;
     if (!user) return json(401, { error: 'Откройте приложение заново из чата с ботом.' });
 
     try {
-      const input = await readBody(request);
+      const input = await readJson(request, 4096);
       const viewer = demo && input.demoRole === 'participant' ? demoParticipant : user;
       return json(200, await action(input, viewer));
     } catch (error) {
@@ -165,12 +160,12 @@ export function createMiniApp({ store, api, token, origin, profilePhoto, demo = 
   };
 }
 
-async function readBody(request) {
+export async function readJson(request, maxBytes) {
   const chunks = [];
   let length = 0;
-  for await (const chunk of request) {
+  for await (const chunk of request.body ?? []) {
     length += chunk.length;
-    if (length > 4096) throw new SantaError('Запрос слишком длинный.');
+    if (length > maxBytes) throw new SantaError('Запрос слишком длинный.');
     chunks.push(chunk);
   }
   try {

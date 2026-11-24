@@ -1,0 +1,15 @@
+{
+  "name": "santa-api",
+  "main": "src/worker.js",
+  "compatibility_date": "2026-07-01",
+  "compatibility_flags": ["nodejs_compat"],
+  "workers_dev": true,
+  "preview_urls": false,
+  "vars": {
+    "MINI_APP_URL": "https://klangcrowngh.github.io/Santa/app/"
+  },
+  "durable_objects": {
+    "bindings": [{ "name": "SANTA", "class_name": "Santa" }]
+  },
+  "migrations": [{ "tag": "v1", "new_sqlite_classes": ["Santa"] }]
+}

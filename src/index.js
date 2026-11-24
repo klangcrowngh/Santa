@@ -1,10 +1,12 @@
 import { createServer } from 'node:http';
 import { readFile } from 'node:fs/promises';
+import { Readable } from 'node:stream';
 import { setTimeout as delay } from 'node:timers/promises';
 import { createBot } from './bot.js';
 import { createMiniApp } from './mini-app.js';
 import { createProfilePhotos } from './profile-photo.js';
 import { createStore } from './store.js';
+import { configureTelegramMenu, createTelegramApi, telegramUpdates } from './telegram.js';
 
 if (process.argv.includes('--preview')) {
   preview();
@@ -33,7 +35,7 @@ function preview() {
   ]);
   createServer(async (request, response) => {
     const path = request.url.split('?')[0];
-    if (path === '/api/santa') return api(request, response);
+    if (path === '/api/santa') return respond(api, request, response);
     if (path === '/' || path === '/app') {
       response.writeHead(302, { location: '/app/' }).end();
       return;
@@ -65,42 +67,10 @@ async function run() {
   process.once('SIGINT', () => shutdown.abort());
   process.once('SIGTERM', () => shutdown.abort());
 
-  async function api(method, fields = {}) {
-    for (;;) {
-      let result;
-      try {
-        const response = await fetch(`https://api.telegram.org/bot${token}/${method}`, {
-          method: 'POST',
-          headers: { 'content-type': 'application/json' },
-          body: JSON.stringify(fields),
-          signal: AbortSignal.any([shutdown.signal, AbortSignal.timeout(35_000)]),
-        });
-        result = await response.json();
-      } catch {
-        throw new Error(`Нет ответа от Telegram (${method}).`);
-      }
-      if (result.ok) return result.result;
-      if (method === 'editMessageText' && result.description?.includes('message is not modified')) return;
-      const retry = result.parameters?.retry_after;
-      if (result.error_code === 429 && retry > 0) {
-        await delay(retry * 1000, undefined, { signal: shutdown.signal });
-        continue;
-      }
-      throw new Error(`Telegram ${method} (${result.error_code}): ${result.description}`);
-    }
-  }
-
+  const api = createTelegramApi(token, { signal: shutdown.signal });
   const { username } = await api('getMe');
   const webhook = await api('getWebhookInfo');
   if (webhook.url) throw new Error('У бота активен вебхук. Отключите его перед запуском в режиме опроса.');
-  await api('setMyCommands', {
-    commands: [
-      { command: 'start', description: 'Мои обмены' },
-      { command: 'new', description: 'Создать обмен' },
-      ...(miniAppUrl ? [{ command: 'link', description: 'Ссылка на обмен для беседы' }] : []),
-      { command: 'cancel', description: 'Вернуться в меню' },
-    ],
-  });
   const store = createStore(process.env.DATABASE_PATH ?? 'data/santa.sqlite', { organizerId });
   const bot = createBot({ api, store, username, miniAppUrl });
   let server;
@@ -108,7 +78,7 @@ async function run() {
     const profilePhoto = createProfilePhotos({ api, token, signal: shutdown.signal });
     const miniApp = createMiniApp({ store, api, token, origin: miniAppUrl.origin, profilePhoto });
     server = createServer((request, response) => {
-      if (request.url === '/api/santa') return miniApp(request, response);
+      if (request.url === '/api/santa') return respond(miniApp, request, response);
       response.writeHead(404).end();
     });
   }
@@ -118,11 +88,9 @@ async function run() {
       const host = process.env.HOST ?? '127.0.0.1';
       const port = Number(process.env.PORT ?? '3000');
       await new Promise((resolve, reject) => server.once('error', reject).listen(port, host, resolve));
-      await api('setChatMenuButton', {
-        menu_button: { type: 'web_app', text: 'Тайный Санта', web_app: { url: miniAppUrl.href } },
-      });
       console.log(`API: http://${host}:${port}/api/santa`);
     }
+    await configureTelegramMenu(api, miniAppUrl);
     console.log(`Бот запущен: https://t.me/${username}`);
     while (!shutdown.signal.aborted) {
       let updates;
@@ -130,12 +98,12 @@ async function run() {
         updates = await api('getUpdates', {
           offset,
           timeout: 25,
-          allowed_updates: ['message', 'callback_query'],
+          allowed_updates: telegramUpdates,
         });
       } catch (error) {
         if (shutdown.signal.aborted) break;
         console.error(error.message);
-        if (error.message.includes('(409)')) throw new Error('Остановите другой экземпляр этого бота.');
+        if (error.status === 409) throw new Error('Остановите другой экземпляр этого бота.');
         await delay(3000);
         continue;
       }
@@ -152,6 +120,20 @@ async function run() {
   } finally {
     if (server) await new Promise((resolve) => server.close(resolve));
     store.close();
+  }
+}
+
+async function respond(handler, request, response) {
+  try {
+    const body = request.method === 'POST' ? Readable.toWeb(request) : undefined;
+    const input = new Request(new URL(request.url, 'http://localhost'), {
+      method: request.method, headers: request.headers, body, duplex: 'half',
+    });
+    const result = await handler(input);
+    response.writeHead(result.status, Object.fromEntries(result.headers));
+    response.end(Buffer.from(await result.arrayBuffer()));
+  } catch {
+    response.writeHead(500).end();
   }
 }
 

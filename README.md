@@ -6,16 +6,18 @@ Telegram Mini App для обмена подарками. В приложени�
 
 Нужен Node.js 22.13 или новее. Запустите `npm run preview` и откройте `http://127.0.0.1:3000/app/` для просмотра от лица организатора или `http://127.0.0.1:3000/app/?role=participant` для просмотра от лица участника. Данные предпросмотра хранятся в памяти.
 
-## Публикация в Telegram
+## Публикация на GitHub Pages и Cloudflare
 
-1. Создайте бота через [@BotFather](https://t.me/BotFather). Заполните `BOT_TOKEN` в локальном `.env` по примеру из `.env.example`. Параметр `ORGANIZER_TELEGRAM_ID` закрепляет создание обменов за указанным аккаунтом.
-2. Подготовьте хост для Node.js. Бот опрашивает Telegram из этого процесса, а Mini App обращается к публичному HTTPS-адресу API. Настройте прокси с TLS или HTTPS-маршрут вашей платформы на порт `PORT`. Конечная точка процесса — `/api/santa`.
-3. В `docs/app/config.js` укажите публичный HTTPS-адрес API, например `https://santa-api.example.com/api/santa`.
-4. Загрузите проект в GitHub. В **Settings → Pages** выберите **Deploy from a branch**, ветку проекта и папку **/docs**. [Инструкция GitHub](https://docs.github.com/en/pages/getting-started-with-github-pages/configuring-a-publishing-source-for-your-github-pages-site)
-5. Укажите опубликованную страницу Mini App в `MINI_APP_URL`, например `https://username.github.io/santa/app/`, и запустите `npm start`. Бот добавит кнопку «Тайный Санта» в меню Telegram.
-6. В @BotFather включите для бота **Main Mini App** и укажите тот же опубликованный адрес. Это включает открытие приложения по прямой ссылке из беседы. [Документация Telegram](https://core.telegram.org/bots/webapps#launching-the-main-mini-app)
+1. Заполните `BOT_TOKEN` и `ORGANIZER_TELEGRAM_ID` в локальном `.env`.
+2. В GitHub откройте **Settings → Pages**, выберите **Deploy from a branch**, ветку `main` и папку **/docs**. [Инструкция GitHub](https://docs.github.com/en/pages/getting-started-with-github-pages/configuring-a-publishing-source-for-your-github-pages-site)
+3. Укажите адрес GitHub Pages в `vars.MINI_APP_URL` в `wrangler.jsonc`. Для этого репозитория задан `https://klangcrowngh.github.io/Santa/app/`. Включите **Main Mini App** у бота через [@BotFather](https://t.me/BotFather) и укажите тот же адрес. [Документация Telegram](https://core.telegram.org/bots/webapps#launching-the-main-mini-app)
+4. Выполните `npm ci` и `npx wrangler login`. В аккаунте Cloudflare должен быть выбран поддомен `workers.dev`. [Настройка workers.dev](https://developers.cloudflare.com/workers/configuration/routing/workers-dev/)
+5. Выполните `npm run cloudflare:deploy`. Команда развернёт Worker, передаст токен как секрет Cloudflare, проверит API, настроит вебхук Telegram и запишет опубликованный адрес API в `docs/app/config.js`.
+6. Закоммитьте обновлённый `docs/app/config.js` и отправьте в `main`. После обновления GitHub Pages снова откройте Mini App в Telegram.
 
-GitHub Pages отдаёт интерфейс. Сервер бота проверяет подпись Telegram и хранит обмены, голоса и результаты в SQLite. По умолчанию файл базы находится в `data/santa.sqlite`. Для хоста с временной файловой системой укажите `DATABASE_PATH` на постоянном диске. Держите запущенным один экземпляр бота. Файл `.env` и каталог `data` исключены из Git. [Документация Telegram Mini Apps](https://core.telegram.org/bots/webapps#validating-data-received-via-the-mini-app)
+GitHub Pages отдаёт интерфейс. Worker проверяет подпись Telegram и хранит обмены, голоса и результаты в SQLite внутри Durable Object. SQLite Durable Objects доступны на бесплатном плане Cloudflare с его лимитами. [Документация Cloudflare](https://developers.cloudflare.com/durable-objects/) · [Проверка подписи Telegram](https://core.telegram.org/bots/webapps#validating-data-received-via-the-mini-app)
+
+При запуске через Cloudflare бот получает обновления по вебхуку. Команда `npm start` нужна только для отдельного запуска через Node.js в режиме опроса Telegram. При таком запуске база хранится в `data/santa.sqlite` по умолчанию. `.env` и каталог `data` исключены из Git.
 
 ## Как проходит обмен
 

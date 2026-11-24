@@ -3,10 +3,16 @@
   "version": "1.0.0",
   "private": true,
   "type": "module",
-  "engines": { "node": ">=22.13.0" },
+  "engines": {
+    "node": ">=22.13.0"
+  },
   "scripts": {
     "start": "node --env-file-if-exists=.env src/index.js",
     "preview": "node --env-file-if-exists=.env src/index.js --preview",
-    "test": "node --test"
+    "test": "node --test",
+    "cloudflare:deploy": "node --env-file=.env scripts/deploy-cloudflare.js"
+  },
+  "devDependencies": {
+    "wrangler": "^4.168.0"
   }
 }

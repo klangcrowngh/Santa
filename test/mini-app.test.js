@@ -1,6 +1,5 @@
 import assert from 'node:assert/strict';
 import { createHmac } from 'node:crypto';
-import { Readable } from 'node:stream';
 import { test } from 'node:test';
 import { createMiniApp, telegramUser } from '../src/mini-app.js';
 import { createProfilePhotos } from '../src/profile-photo.js';
@@ -42,17 +41,10 @@ test('Mini App выдаёт только свой результат и не р�
     profilePhoto: async (id) => id === owner.id ? 'data:image/jpeg;base64,SGk=' : null,
   });
   async function submit(input, user, requestOrigin = origin) {
-    const request = Readable.from([Buffer.from(JSON.stringify(input))]);
-    request.headers = { origin: requestOrigin, authorization: user && `tma ${signed(user)}` };
-    request.method = 'POST';
-    const result = {};
-    const response = {
-      setHeader() {},
-      writeHead(status) { result.status = status; return this; },
-      end(body) { result.body = JSON.parse(body); },
-    };
-    await handle(request, response);
-    return result;
+    const headers = { origin: requestOrigin };
+    if (user) headers.authorization = `tma ${signed(user)}`;
+    const result = await handle(new Request(origin, { method:'POST', headers, body: JSON.stringify(input) }));
+    return { status: result.status, body: await result.json() };
   }
 
   assert.equal((await submit({ action: 'list' })).status, 401);

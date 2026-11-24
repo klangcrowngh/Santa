@@ -1,5 +1,5 @@
 import { budget, clampBudget, isBudget, price } from '../docs/budget/settings.js';
-import { average, drawReady, SantaError } from './store.js';
+import { average, drawReady, SantaError } from './store-data.js';
 
 const button = (text, callback_data) => ({ text, callback_data });
 const back = (id) => [button('‹ К обмену', `e:${id}`)];
