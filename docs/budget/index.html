@@ -1,0 +1,43 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#111111">
+  <meta name="referrer" content="no-referrer">
+  <title>Бюджет подарка · Тайный Санта</title>
+  <link rel="stylesheet" href="./style.css">
+  <script src="https://telegram.org/js/telegram-web-app.js" defer></script>
+  <script type="module" src="./app.js"></script>
+</head>
+<body>
+  <main>
+    <header class="hero">
+      <p class="brand">Тайный Санта</p>
+      <h1>Бюджет<br>подарка</h1>
+      <p class="description">Выберите сумму, которую вам комфортно потратить.</p>
+      <div class="illustration" aria-hidden="true">
+        <span class="star star-top">✦</span>
+        <span class="star star-bottom">✧</span>
+        <span class="gift"></span>
+      </div>
+    </header>
+    <form class="budget-card">
+      <label for="amount">Ваш выбор</label>
+      <output id="selected" for="amount">2 500 ₽</output>
+      <div class="range-control">
+        <input type="range" id="amount" name="amount" min="1000" max="5000" step="100" value="2500" aria-describedby="budget-help">
+        <div class="bounds" aria-hidden="true"><span id="minimum">1 000 ₽</span><span id="maximum">5 000 ₽</span></div>
+      </div>
+      <div class="presets" role="group" aria-label="Быстрый выбор суммы">
+        <button type="button" data-amount="1000">1 000 ₽</button>
+        <button type="button" data-amount="2500">2 500 ₽</button>
+        <button type="button" data-amount="5000">5 000 ₽</button>
+      </div>
+      <p id="budget-help">Общий бюджет — среднее по всем участникам.</p>
+      <button class="submit" type="submit">Сохранить бюджет <span aria-hidden="true">→</span></button>
+      <p class="status" role="status" hidden></p>
+    </form>
+  </main>
+</body>
+</html>
